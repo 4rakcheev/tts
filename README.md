@@ -1,2 +1,2 @@
 # tts
-Golang text to speech package uses a different speech synthesis engines like AWS Polly or Google Cloud or Microsoft Azure and others
+The package provides a unified API for various speech synthesis providers (text to speech) such as AWS Polly, Google Cloud Text-to-speech, Microsoft Azure and others.
