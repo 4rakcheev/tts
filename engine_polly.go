@@ -12,26 +12,27 @@ import (
 const pollyAPI = "https://polly.us-west-2.amazonaws.com"
 
 type Polly struct {
-	accessKey string
-	secretKey string
-	request   request
+	client      *aws4.Client
+	endpointAPI string
+	request     pollyRequest
 }
 
-type request struct {
-	EndpointAPI string
-	LanguageCode string
-	OutputFormat string
-	SampleRate   string
-	Text         string
-	VoiceId      string
+type pollyRequest struct {
+	LanguageCode string `json:"LanguageCode"`
+	OutputFormat string `json:"OutputFormat"`
+	SampleRate   string `json:"SampleRate"`
+	Text         string `json:"Text"`
+	VoiceId      string `json:"VoiceId"`
 }
 
-func NewPolly(accessKey string, secretKey string) TTS {
+func NewPollyTTS(accessKey string, secretKey string) TTS {
 	return &Polly{
-		accessKey: accessKey,
-		secretKey: secretKey,
-		request: request{
-			EndpointAPI:  pollyAPI,
+		client: &aws4.Client{Keys: &aws4.Keys{
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+		}},
+		endpointAPI: pollyAPI,
+		request: pollyRequest{
 			LanguageCode: "en-US",
 			OutputFormat: "mp3",
 			SampleRate:   "22050",
@@ -68,18 +69,13 @@ func (t *Polly) Speech(text string) ([]byte, error) {
 		return nil, err
 	}
 
-	r, _ := http.NewRequest("POST", pollyAPI+"/v1/speech", bytes.NewReader(b))
+	r, _ := http.NewRequest("POST", t.endpointAPI+"/v1/speech", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
 
-	client := aws4.Client{Keys: &aws4.Keys{
-		AccessKey: t.accessKey,
-		SecretKey: t.secretKey}}
-
-	res, err := client.Do(r)
+	res, err := t.client.Do(r)
 	if err != nil {
 		return nil, err
 	}
-
 	defer func() {
 		_ = res.Body.Close()
 	}()
@@ -89,13 +85,15 @@ func (t *Polly) Speech(text string) ([]byte, error) {
 		return nil, err
 	} else if res.StatusCode == 400 {
 		return nil, ErrEngineBadRequest{Msg: string(data)}
+	} else if res.StatusCode == 403 {
+		return nil, ErrEngineAuthorizationFailed{Msg: string(data)}
 	} else if res.StatusCode != 200 {
-		return nil, fmt.Errorf("returned status code: %s %q", res.Status, data)
+		return nil, fmt.Errorf("api got http error with code `%d` and body `%q`", res.StatusCode, data)
 	}
 
 	return data, nil
 }
 
 func (t *Polly) EndpointAPI(url string) {
-	t.request.EndpointAPI = url
+	t.endpointAPI = url
 }
